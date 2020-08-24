@@ -3,21 +3,11 @@
 #include "los_task.ph"
 #include "los_memory.ph"
 #include "los_queue.h"
-#include "los_swtmr.h"
+#include "los_sem.h"
 
-enum LIGHT_TYPE{
-	LIGHT_ON = 0,
-	LIGHT_OFF 
-}LIGHT_TYPE ;
+uint32_t vKeyHitTaskID,task2ID;
 
-uint32_t vKeyHitTaskID;
-enum LIGHT_TYPE backLightState = LIGHT_OFF;
-uint16_t timerID;
-void timeHandle(uint32_t arg)
-{
-	backLightState = LIGHT_OFF;
-	printf("time over:light off\n");
-}
+uint32_t semID;
 
 void vKeyHitTask(uint32_t arg)
 {
@@ -25,23 +15,24 @@ void vKeyHitTask(uint32_t arg)
 	while(1)
 	{
 		LOS_TaskDelay(500);
-		if(backLightState == LIGHT_OFF)
-		{
-			backLightState = LIGHT_ON;
-			printf("time over:light on\n");
-			//ÖØ¸´¶¨Ê±Æ÷
-			retVal = LOS_SwtmrCreate(5000, LOS_SWTMR_MODE_ONCE, timeHandle, &timerID, 20 ,
-															OS_SWTMR_ROUSES_IGNORE, OS_SWTMR_ALIGN_INSENSITIVE);
-			if(retVal != LOS_OK)
-			{
-				printf("create timer fail\n");
-			}
-			LOS_SwtmrStart(timerID);
-		}
-
+		LOS_SemPost(semID);
+		printf("sem post\n");
 	}
 }
 
+void task2(uint32_t arg)
+{
+	uint32_t retVal;
+	while(1)
+	{
+		retVal = LOS_SemPend(semID, LOS_WAIT_FOREVER);
+		if(retVal != LOS_OK)
+		{
+			printf("LOS_SemPend fail\n");
+		}
+		printf("get sem\n");
+	}
+}
 
 uint32_t taskCreate(void)
 {
@@ -50,7 +41,7 @@ uint32_t taskCreate(void)
 	
 	taskInitParam.pcName ="vKeyHitTask";
 	taskInitParam.pfnTaskEntry = (TSK_ENTRY_FUNC)&vKeyHitTask;
-	taskInitParam.usTaskPrio = 4;
+	taskInitParam.usTaskPrio = 5;
 	taskInitParam.uwStackSize = 512;
 	taskInitParam.uwArg = 100;
 	retVal = LOS_TaskCreate(&vKeyHitTaskID,&taskInitParam);
@@ -58,6 +49,17 @@ uint32_t taskCreate(void)
 	{
 		printf("LOS_TaskCreate() fail,%X\n", retVal);
 	}
+	taskInitParam.pcName ="task2";
+	taskInitParam.pfnTaskEntry = (TSK_ENTRY_FUNC)&task2;
+	taskInitParam.usTaskPrio = 4;
+	taskInitParam.uwStackSize = 512;
+	retVal = LOS_TaskCreate(&task2ID,&taskInitParam);
+	if(retVal != LOS_OK)
+	{
+		printf("LOS_TaskCreate() fail,%X\n", retVal);
+	}
+	
+	LOS_BinarySemCreate(0,&semID);
 	
 	return LOS_OK;
 }
