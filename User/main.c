@@ -52,6 +52,9 @@ uint32_t taskCreate(void)
 int32_t main(void)
 {
 	uint32_t retVal;
+	
+	initUart();
+	
 	retVal = LOS_KernelInit();
 	if(retVal != LOS_OK)
 	{
