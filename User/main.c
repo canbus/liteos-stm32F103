@@ -5,61 +5,65 @@
 #include "los_queue.h"
 #include "los_sem.h"
 
-uint32_t vKeyHitTaskID,task2ID;
+typedef struct{
+	uint32_t handleID;
+	BOOL isUsed;
+}ResHandler;
 
-uint32_t semID;
+static ResHandler sResHandler[3] = {
+	{100,FALSE},{200,FALSE},{300,FALSE}
+};
 
-void vKeyHitTask(uint32_t arg)
+static uint32_t sSemID;
+
+uint32_t tasksID;
+
+static void * tasks(uint32_t arg)
 {
-	uint32_t retVal;
-	while(1)
-	{
-		LOS_TaskDelay(500);
-		LOS_SemPost(semID);
-		printf("sem post\n");
-	}
-}
-
-void task2(uint32_t arg)
-{
-	uint32_t retVal;
-	while(1)
-	{
-		retVal = LOS_SemPend(semID, LOS_WAIT_FOREVER);
-		if(retVal != LOS_OK)
-		{
-			printf("LOS_SemPend fail\n");
+	uint32_t retVal, i;
+	printf("tasks(%d) should be Pending.\r\n",arg);
+	retVal = LOS_SemPend(sSemID, LOS_WAIT_FOREVER);
+	if(retVal == LOS_OK){
+		for(i = 0; i< 3; i++){
+			if(sResHandler[i].isUsed == FALSE){
+				sResHandler[i].isUsed = TRUE;
+				break;
+			}
 		}
-		printf("get sem\n");
+		printf("I am(%d) wordking on it(%d)\r\n", arg, sResHandler[i].handleID);
+		LOS_TaskDelay(1000);
+		
+		sResHandler[i].isUsed = FALSE;
+		LOS_SemPost(sSemID);
 	}
+	printf("tasks(%d) finished\r\n",arg);
+	return LOS_OK;
 }
+
 
 uint32_t taskCreate(void)
 {
-	uint32_t retVal;
+	uint32_t retVal,i;
 	TSK_INIT_PARAM_S taskInitParam={0};
 	
-	taskInitParam.pcName ="vKeyHitTask";
-	taskInitParam.pfnTaskEntry = (TSK_ENTRY_FUNC)&vKeyHitTask;
-	taskInitParam.usTaskPrio = 5;
-	taskInitParam.uwStackSize = 512;
-	taskInitParam.uwArg = 100;
-	retVal = LOS_TaskCreate(&vKeyHitTaskID,&taskInitParam);
-	if(retVal != LOS_OK)
-	{
-		printf("LOS_TaskCreate() fail,%X\n", retVal);
-	}
-	taskInitParam.pcName ="task2";
-	taskInitParam.pfnTaskEntry = (TSK_ENTRY_FUNC)&task2;
-	taskInitParam.usTaskPrio = 4;
-	taskInitParam.uwStackSize = 512;
-	retVal = LOS_TaskCreate(&task2ID,&taskInitParam);
-	if(retVal != LOS_OK)
-	{
-		printf("LOS_TaskCreate() fail,%X\n", retVal);
+	retVal = LOS_SemCreate(3,&sSemID);//创建一个多值信号量
+	if(retVal != LOS_OK){
+		printf("LOS_SemCreate Failed\n");
+		return LOS_NOK;
 	}
 	
-	LOS_BinarySemCreate(0,&semID);
+	for(i=0; i < 10; i++){
+		taskInitParam.pcName ="tasks";
+		taskInitParam.pfnTaskEntry = (TSK_ENTRY_FUNC)&tasks;
+		taskInitParam.usTaskPrio = 5;
+		taskInitParam.uwStackSize = 512;
+		taskInitParam.uwArg = i;
+		retVal = LOS_TaskCreate(&tasksID,&taskInitParam);
+		if(retVal != LOS_OK)
+		{
+			printf("LOS_TaskCreate() fail,%X\n", retVal);
+		}
+	}
 	
 	return LOS_OK;
 }
